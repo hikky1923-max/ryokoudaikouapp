@@ -13,10 +13,7 @@ export interface Trip {
 }
 
 export type StopCategory =
-  | "sightseeing"
-  | "food"
-  | "shopping"
-  | "activity"
+  | "activity" // 観光施設・食事・買い物など、訪れて過ごす場所全般
   | "lodging" // このカテゴリの直後でタイムライン表示上「Day」が区切られる
   | "other";
 
@@ -39,7 +36,8 @@ export interface Stop {
   createdAt: string;
 }
 
-export type LegMode = "walk" | "transit" | "drive" | "bicycle";
+// 徒歩(自動ルート計算の対象) か、乗換案内(電車・バスなど、貼り付け/手動で記録する対象) かの記録。
+export type LegMode = "walk" | "transit";
 
 export interface TransitStepDetail {
   lineName?: string;
@@ -47,6 +45,9 @@ export interface TransitStepDetail {
   departureStop?: string;
   arrivalStop?: string;
   numStops?: number;
+  headsign?: string; // 方面・行き先(例: "京橋・鶴橋方面", "高槻行")
+  departurePlatform?: string; // 発○番線
+  arrivalPlatform?: string; // 着○番線
 }
 
 export interface Leg {
@@ -95,4 +96,5 @@ export interface BudgetSummary {
 
 export interface Settings {
   googleMapsApiKey: string | null;
+  geminiApiKey: string | null; // 乗換案内のスクリーンショットからの経路読み取りに使用
 }

@@ -11,11 +11,15 @@ export class GoogleMapsError extends Error {}
 declare global {
   interface Window {
     google?: any;
+    __tripPlannerGMapsLoadPromise?: Promise<void>;
+    __tripPlannerGMapsLoadedForKey?: string;
   }
 }
 
-let loadPromise: Promise<void> | null = null;
-let loadedForKey: string | null = null;
+// window自体にPromise/キーを持たせ、開発中のHMR(モジュール再評価)を挟んでも
+// スクリプトが二重に注入されないようにする(module-scopeの変数だとHMRでリセットされてしまい、
+// 既にgoogle.maps.placesが読み込み済みでも再度<script>を追加してしまい、
+// Places APIが壊れる原因になっていた)。
 let callbackCounter = 0;
 
 export function loadGoogleMapsScript(apiKey: string): Promise<void> {
@@ -24,16 +28,20 @@ export function loadGoogleMapsScript(apiKey: string): Promise<void> {
       new GoogleMapsError("Google Maps APIキーが設定されていません。")
     );
   }
-  if (loadedForKey === apiKey && window.google?.maps?.places) {
+  // 既に読み込み済みなら、どのキーで読み込まれたかに関わらずそのまま使う。
+  if (window.google?.maps?.places) {
+    window.__tripPlannerGMapsLoadedForKey = apiKey;
     return Promise.resolve();
   }
-  if (loadPromise && loadedForKey === apiKey) return loadPromise;
+  if (window.__tripPlannerGMapsLoadPromise && window.__tripPlannerGMapsLoadedForKey === apiKey) {
+    return window.__tripPlannerGMapsLoadPromise;
+  }
 
-  loadedForKey = apiKey;
+  window.__tripPlannerGMapsLoadedForKey = apiKey;
   callbackCounter += 1;
   const callbackName = `__tripPlannerGMapsReady${callbackCounter}`;
 
-  loadPromise = new Promise((resolve, reject) => {
+  window.__tripPlannerGMapsLoadPromise = new Promise((resolve, reject) => {
     (window as unknown as Record<string, () => void>)[callbackName] = () => {
       delete (window as unknown as Record<string, unknown>)[callbackName];
       resolve();
@@ -49,7 +57,7 @@ export function loadGoogleMapsScript(apiKey: string): Promise<void> {
     document.head.appendChild(script);
   });
 
-  return loadPromise;
+  return window.__tripPlannerGMapsLoadPromise;
 }
 
 export function isGoogleMapsReady(): boolean {
@@ -90,6 +98,41 @@ export function attachPlaceAutocomplete(
   };
 }
 
+export interface GeocodedPlace {
+  placeId: string | null;
+  lat: number;
+  lng: number;
+}
+
+// オートコンプリートで候補を選ばず名前だけが入力されているStopのための、
+// バックグラウンドでの自動ジオコーディング。google.maps.Geocoderを使う
+// (Places APIではなくMaps JS APIの標準機能なので追加の有効化は不要)。
+// 見つからない場合はnullを返す(呼び出し側で「位置情報が見つかりませんでした」等を出す)。
+export async function geocodePlaceName(name: string): Promise<GeocodedPlace | null> {
+  const g = window.google;
+  if (!g?.maps) {
+    throw new GoogleMapsError("Google Mapsが読み込まれていません。");
+  }
+  const geocoder = new g.maps.Geocoder();
+  return new Promise((resolve) => {
+    geocoder.geocode(
+      { address: name, region: "jp", language: "ja" },
+      (results: any, status: string) => {
+        if (status === "OK" && results?.[0]?.geometry?.location) {
+          const result = results[0];
+          resolve({
+            placeId: result.place_id ?? null,
+            lat: result.geometry.location.lat(),
+            lng: result.geometry.location.lng(),
+          });
+        } else {
+          resolve(null);
+        }
+      }
+    );
+  });
+}
+
 export interface RouteResult {
   durationMinutes: number;
   distanceMeters: number;
@@ -108,8 +151,6 @@ const ROUTES_API_FIELD_MASK = [
 const MODE_MAP: Record<LegMode, string> = {
   walk: "WALK",
   transit: "TRANSIT",
-  drive: "DRIVE",
-  bicycle: "BICYCLE",
 };
 
 function toRoutesApiWaypoint(p: { placeId: string } | { lat: number; lng: number }) {

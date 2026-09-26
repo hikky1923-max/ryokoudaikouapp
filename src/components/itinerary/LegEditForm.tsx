@@ -5,15 +5,11 @@ import type { Leg, LegMode, TransitStepDetail } from "../../types";
 
 const MODE_LABEL: Record<LegMode, string> = {
   walk: "徒歩",
-  transit: "公共交通機関",
-  drive: "車",
-  bicycle: "自転車",
+  transit: "電車・バス(乗換案内)",
 };
 
 export function LegEditForm({ leg, onClose }: { leg: Leg; onClose: () => void }) {
   const setLegOverride = useTripStore((s) => s.actions.setLegOverride);
-  const fromStop = useTripStore((s) => s.stops[leg.fromStopId]);
-  const toStop = useTripStore((s) => s.stops[leg.toStopId]);
 
   const [mode, setMode] = useState<LegMode>(leg.mode);
   const [duration, setDuration] = useState(leg.durationMinutes?.toString() ?? "");
@@ -32,9 +28,11 @@ export function LegEditForm({ leg, onClose }: { leg: Leg; onClose: () => void })
 
   function handleParse() {
     const info = parseTransitShareText(pasteText);
-    if (!hasAnyParsedData(info)) {
+    if (!hasAnyParsedData(info) || info.segments.length === 0) {
       setParsedSummary(null);
-      setParsedWarning("経路情報を読み取れませんでした。Yahoo!乗換案内の「検索結果を共有」テキストを貼り付けてください。");
+      setParsedWarning(
+        "経路情報を読み取れませんでした。Yahoo!乗換案内の「検索結果を共有」テキストを貼り付けてください。"
+      );
       return;
     }
 
@@ -42,35 +40,27 @@ export function LegEditForm({ leg, onClose }: { leg: Leg; onClose: () => void })
     if (info.durationMinutes != null) setDuration(String(info.durationMinutes));
     if (info.distanceMeters != null) setDistanceKm((info.distanceMeters / 1000).toString());
     if (info.fareYen != null) setCost(String(info.fareYen));
-    if (info.lineNames.length > 0) {
-      setTransitDetails(
-        info.lineNames.map((lineName) => ({
-          lineName,
-          departureStop: info.fromName ?? undefined,
-          arrivalStop: info.toName ?? undefined,
-        }))
-      );
-    }
+    setTransitDetails(
+      info.segments.map((segment) => ({
+        lineName: segment.lineName ?? undefined,
+        headsign: segment.headsign ?? undefined,
+        departureStop: segment.fromName,
+        arrivalStop: segment.toName,
+        departurePlatform: segment.departurePlatform ?? undefined,
+        arrivalPlatform: segment.arrivalPlatform ?? undefined,
+      }))
+    );
 
     const summaryParts = [
-      info.fromName && info.toName ? `${info.fromName} → ${info.toName}` : null,
-      info.date,
-      info.departureTime && info.arrivalTime ? `${info.departureTime}〜${info.arrivalTime}` : null,
+      info.segments
+        .map((s) => `${s.fromName}→${s.toName}${s.lineName ? `(${s.lineName})` : ""}`)
+        .join(" ・ "),
       info.durationMinutes != null ? `${info.durationMinutes}分` : null,
       info.fareYen != null ? `${info.fareYen}円` : null,
       info.distanceMeters != null ? `${(info.distanceMeters / 1000).toFixed(1)}km` : null,
-      info.lineNames.length > 0 ? info.lineNames.join("、") : null,
     ].filter(Boolean);
     setParsedSummary(summaryParts.join(" ・ "));
-
-    const mismatches: string[] = [];
-    if (info.fromName && fromStop && !fromStop.name.includes(info.fromName) && !info.fromName.includes(fromStop.name)) {
-      mismatches.push(`出発地「${info.fromName}」が現在のStop「${fromStop.name}」と異なります`);
-    }
-    if (info.toName && toStop && !toStop.name.includes(info.toName) && !info.toName.includes(toStop.name)) {
-      mismatches.push(`到着地「${info.toName}」が現在のStop「${toStop.name}」と異なります`);
-    }
-    setParsedWarning(mismatches.length > 0 ? mismatches.join(" / ") : null);
+    setParsedWarning(null);
   }
 
   function handleSave() {

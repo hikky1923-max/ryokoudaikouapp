@@ -269,17 +269,17 @@ select {
 
 .stop-node {
   display: flex;
-  gap: 12px;
+  gap: 0;
 }
 
 .stop-time-col {
-  width: 64px;
+  width: 56px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding-top: 16px;
+  padding-top: 14px;
 }
 
 .stop-time {
@@ -297,13 +297,74 @@ select {
   opacity: 1;
 }
 
+.inline-time-input {
+  font-size: 12px;
+  padding: 1px 3px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-muted);
+  width: 84px;
+}
+
+/* 駅・場所を結ぶ縦のレール。StopとLegの行を通して同じ幅・位置にすることで
+   1本の連続した線に見せる(Yahoo!乗換案内のタイムライン風)。 */
+.stop-rail,
+.leg-rail {
+  width: 32px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.stop-rail::before,
+.leg-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.stop-marker {
+  position: relative;
+  z-index: 1;
+  margin-top: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.stop-marker-lodging {
+  border-color: var(--warning);
+  background: #fff7ed;
+}
+
+.stop-body.stop-body-lodging {
+  background: #fff7ed;
+  border-color: var(--warning);
+}
+
+.category-select-lodging {
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  background: var(--surface);
+  color: #92400e;
+}
+
 .stop-body {
   flex: 1;
   min-width: 0;
-}
-
-.stop-icon {
-  font-size: 16px;
+  margin: 4px 0 10px 8px;
 }
 
 .stop-name-input {
@@ -322,36 +383,125 @@ select {
 
 .leg-connector {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0 6px 24px;
-  margin-left: 40px;
-  border-left: 3px solid var(--accent);
-  min-height: 28px;
-  flex-wrap: wrap;
 }
 
-.leg-line {
-  display: none;
+.leg-body {
+  flex: 1;
+  min-width: 0;
+  margin: 2px 0 2px 8px;
 }
 
 .leg-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   font-size: 13px;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .leg-info:hover {
   background: var(--surface-alt);
 }
 
+.leg-mode-badge {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.leg-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.leg-line-name {
+  font-weight: 700;
+}
+
+.leg-segment {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.leg-segment-icon {
+  margin-right: 4px;
+}
+
+.leg-segment-walk {
+  opacity: 0.75;
+}
+
+.platform-chip {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.leg-fare-box {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: var(--accent-soft);
+  white-space: nowrap;
+}
+
 .leg-edit-form,
 .add-stop-form {
-  margin: 8px 0 8px 40px;
+  margin-top: 8px;
+}
+
+.import-step {
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border);
+  margin-bottom: 10px;
+}
+
+.import-step:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.import-step-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.image-drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: text;
+  background: var(--surface-alt);
+}
+
+.image-drop-zone:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .budget-table {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { format } from "date-fns";
+import { addDays, differenceInMinutes, format } from "date-fns";
 import { useTripStore } from "../../store/useTripStore";
 import { useGoogleMapsReady } from "../../hooks/useGoogleMapsReady";
 import { attachPlaceAutocomplete } from "../../lib/googleMaps";
@@ -7,18 +7,12 @@ import type { ComputedStopTime } from "../../lib/timeline";
 import type { Stop, StopCategory } from "../../types";
 
 const CATEGORY_ICON: Record<StopCategory, string> = {
-  sightseeing: "📷",
-  food: "🍴",
-  shopping: "🛍",
   activity: "🎟",
   lodging: "🛏",
   other: "📍",
 };
 
 const CATEGORY_LABEL: Record<StopCategory, string> = {
-  sightseeing: "観光",
-  food: "食事",
-  shopping: "買い物",
   activity: "アクティビティ",
   lodging: "宿泊",
   other: "その他",
@@ -71,6 +65,20 @@ export function StopNode({
     });
   }
 
+  // 出発時刻(HH:mm)を直接編集した場合、到着時刻との差から滞在時間を逆算して更新する。
+  // 到着時刻より前の時刻を入れた場合は日をまたいだとみなす。
+  function handleDepartureTimeChange(value: string, arrival: Date) {
+    const [h, m] = value.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    let newDeparture = new Date(arrival);
+    newDeparture.setHours(h, m, 0, 0);
+    if (newDeparture < arrival) {
+      newDeparture = addDays(newDeparture, 1);
+    }
+    const newStay = differenceInMinutes(newDeparture, arrival);
+    updateStop(stop.id, { stayDurationMinutes: Math.max(0, newStay) });
+  }
+
   return (
     <div className="stop-node">
       <div className="stop-time-col">
@@ -93,9 +101,18 @@ export function StopNode({
         </button>
       </div>
 
-      <div className="stop-body card">
+      <div className="stop-rail">
+        <div
+          className={`stop-marker${stop.category === "lodging" ? " stop-marker-lodging" : ""}`}
+        >
+          {CATEGORY_ICON[stop.category]}
+        </div>
+      </div>
+
+      <div
+        className={`stop-body card${stop.category === "lodging" ? " stop-body-lodging" : ""}`}
+      >
         <div className="card-header">
-          <span className="stop-icon">{CATEGORY_ICON[stop.category]}</span>
           <input
             ref={nameInputRef}
             className="stop-name-input"
@@ -135,6 +152,7 @@ export function StopNode({
 
         <div className="row">
           <select
+            className={stop.category === "lodging" ? "category-select-lodging" : ""}
             value={stop.category}
             onChange={(e) => updateStop(stop.id, { category: e.target.value as StopCategory })}
           >
@@ -155,6 +173,20 @@ export function StopNode({
             }
             style={{ width: 72 }}
           />
+          {computedTime.departure && computedTime.arrival && (
+            <span className="row" style={{ gap: 2 }}>
+              <span className="muted">→</span>
+              <input
+                type="time"
+                className="inline-time-input"
+                value={format(computedTime.departure, "HH:mm")}
+                onChange={(e) =>
+                  handleDepartureTimeChange(e.target.value, computedTime.arrival!)
+                }
+              />
+              <span className="muted">出発</span>
+            </span>
+          )}
         </div>
 
         {isPinned && (

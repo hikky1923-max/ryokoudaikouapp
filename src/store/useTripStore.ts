@@ -11,7 +11,7 @@ import type {
   Stop,
   Trip,
 } from "../types";
-import { computeRoute, loadGoogleMapsScript } from "../lib/googleMaps";
+import { computeRoute, geocodePlaceName, loadGoogleMapsScript } from "../lib/googleMaps";
 import { computeStopTimes } from "../lib/timeline";
 
 const now = () => new Date().toISOString();
@@ -30,7 +30,7 @@ function emptyState(): TripPlannerState {
     stops: {},
     legs: {},
     budgetEntries: {},
-    settings: { googleMapsApiKey: null },
+    settings: { googleMapsApiKey: null, geminiApiKey: null },
   };
 }
 
@@ -38,6 +38,38 @@ function tripStopsSorted(s: TripPlannerState, tripId: ID): Stop[] {
   return Object.values(s.stops)
     .filter((st) => st.tripId === tripId)
     .sort((a, b) => a.order - b.order);
+}
+
+// Legのcostが設定/変更された際に呼ぶ。工程表で入力された移動費用が予算タブに
+// 自動的に反映されるよう、そのLegに紐づくBudgetEntryを作成/更新する
+// (手動で作った既存のラベル・実績額・予約済みフラグは上書きしない)。
+function syncLegBudgetEntry(s: TripPlannerState, leg: Leg) {
+  if (leg.cost == null) return;
+  let entry = leg.budgetEntryId ? s.budgetEntries[leg.budgetEntryId] : undefined;
+  if (!entry) {
+    entry = Object.values(s.budgetEntries).find((e) => e.legId === leg.id);
+  }
+  if (entry) {
+    entry.plannedAmount = leg.cost;
+    return;
+  }
+  const fromName = s.stops[leg.fromStopId]?.name ?? "";
+  const toName = s.stops[leg.toStopId]?.name ?? "";
+  const label = leg.transitDetails?.[0]?.lineName || `${fromName} → ${toName}`;
+  const id = uuid();
+  s.budgetEntries[id] = {
+    id,
+    tripId: leg.tripId,
+    category: "transport",
+    label,
+    plannedAmount: leg.cost,
+    actualAmount: null,
+    isBooked: false,
+    stopId: null,
+    legId: leg.id,
+    createdAt: now(),
+  };
+  leg.budgetEntryId = id;
 }
 
 // 構造変更（追加・削除・並び替え）の最後に必ず呼ぶ。隣接関係が変わったStopペアに合わせて
@@ -74,7 +106,11 @@ function syncLegsToAdjacency(s: TripPlannerState, tripId: ID) {
       tripId,
       fromStopId,
       toStopId,
-      mode: "transit",
+      // 徒歩をデフォルトにする: 自動計算できるのは徒歩のみなので、
+      // 場所を手動で追加しただけの状態でも「ルートを計算」がすぐ使える。
+      // 乗換案内の情報を貼り付けた場合はImportRouteForm/LegEditFormが
+      // その直後にmode:"transit"へ上書きする。
+      mode: "walk",
       durationMinutes: null,
       distanceMeters: null,
       isManualOverride: false,
@@ -214,7 +250,7 @@ export const useTripStore = create<Store>()(
               placeId: input.placeId ?? null,
               lat: input.lat ?? null,
               lng: input.lng ?? null,
-              category: input.category ?? "sightseeing",
+              category: input.category ?? "activity",
               stayDurationMinutes: input.stayDurationMinutes ?? 60,
               arrivalTime: input.arrivalTime ?? null,
               note: input.note ?? "",
@@ -278,25 +314,43 @@ export const useTripStore = create<Store>()(
           const apiKey = state.settings.googleMapsApiKey;
           if (!fromStop || !toStop || !apiKey) return;
 
-          const originPoint =
-            fromStop.placeId != null
-              ? { placeId: fromStop.placeId }
-              : fromStop.lat != null && fromStop.lng != null
-                ? { lat: fromStop.lat, lng: fromStop.lng }
+          await loadGoogleMapsScript(apiKey);
+
+          const toWaypoint = (stop: Stop) =>
+            stop.placeId != null
+              ? { placeId: stop.placeId }
+              : stop.lat != null && stop.lng != null
+                ? { lat: stop.lat, lng: stop.lng }
                 : null;
-          const destinationPoint =
-            toStop.placeId != null
-              ? { placeId: toStop.placeId }
-              : toStop.lat != null && toStop.lng != null
-                ? { lat: toStop.lat, lng: toStop.lng }
-                : null;
+
+          // オートコンプリートで候補を選ばず名前だけのStopは、位置情報が無いままだと
+          // ルート計算できない。ここでバックグラウンドで自動ジオコーディングを試み、
+          // 成功すればStop自体にも保存して次回以降は再ジオコーディング不要にする。
+          async function resolvePoint(stop: Stop) {
+            const point = toWaypoint(stop);
+            if (point) return point;
+            const geocoded = await geocodePlaceName(stop.name);
+            if (!geocoded) return null;
+            set((s) => {
+              const target = s.stops[stop.id];
+              if (!target) return;
+              target.placeId = geocoded.placeId;
+              target.lat = geocoded.lat;
+              target.lng = geocoded.lng;
+            });
+            return { lat: geocoded.lat, lng: geocoded.lng };
+          }
+
+          const [originPoint, destinationPoint] = await Promise.all([
+            resolvePoint(fromStop),
+            resolvePoint(toStop),
+          ]);
           if (!originPoint || !destinationPoint) {
             throw new Error(
-              "場所の位置情報がありません。オートコンプリートで場所を選び直してください。"
+              "場所の位置情報が見つかりませんでした。名前を確認するか、オートコンプリートで場所を選び直してください。"
             );
           }
 
-          await loadGoogleMapsScript(apiKey);
           const mode: LegMode = leg.mode;
 
           // 出発地点のタイムライン上の出発時刻を計算し、transitモードの発車時刻として渡す。
@@ -333,6 +387,7 @@ export const useTripStore = create<Store>()(
             if (!leg) return;
             Object.assign(leg, patch);
             leg.isManualOverride = true;
+            if (patch.cost !== undefined) syncLegBudgetEntry(s, leg);
           }),
 
         addBudgetEntry: (input) => {
@@ -427,6 +482,31 @@ export const useTripStore = create<Store>()(
     })),
     {
       name: "trip-planner-storage",
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = persistedState as TripPlannerState | undefined;
+
+        // v0→v1: StopCategoryを sightseeing/food/shopping/activity/lodging/other から
+        // activity/lodging/other の3種類に整理。旧カテゴリはactivityへ寄せる。
+        if (version < 1 && state?.stops) {
+          for (const stop of Object.values(state.stops)) {
+            if (stop.category !== "lodging" && stop.category !== "other") {
+              stop.category = "activity";
+            }
+          }
+        }
+
+        // v1→v2: 工程表のLeg費用が予算タブに反映されていなかった既存データを、
+        // 対応するBudgetEntryへ遡って同期する。
+        if (version < 2 && state?.legs) {
+          if (!state.budgetEntries) state.budgetEntries = {};
+          for (const leg of Object.values(state.legs)) {
+            syncLegBudgetEntry(state, leg);
+          }
+        }
+
+        return state as Store;
+      },
       partialize: (state) => {
         const { actions, ...rest } = state;
         return rest;

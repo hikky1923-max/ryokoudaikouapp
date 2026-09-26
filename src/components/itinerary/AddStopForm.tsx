@@ -5,9 +5,6 @@ import { attachPlaceAutocomplete, type PlaceSelection } from "../../lib/googleMa
 import type { ID, StopCategory } from "../../types";
 
 const CATEGORY_LABEL: Record<StopCategory, string> = {
-  sightseeing: "観光",
-  food: "食事",
-  shopping: "買い物",
   activity: "アクティビティ",
   lodging: "宿泊",
   other: "その他",
@@ -26,7 +23,7 @@ export function AddStopForm({
   const { ready } = useGoogleMapsReady();
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<StopCategory>("sightseeing");
+  const [category, setCategory] = useState<StopCategory>("activity");
   const [stayMinutes, setStayMinutes] = useState(60);
   const [selected, setSelected] = useState<PlaceSelection | null>(null);
 
