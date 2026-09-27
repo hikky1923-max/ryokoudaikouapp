@@ -3,7 +3,7 @@ import { useTripStore } from "../../store/useTripStore";
 import { useGoogleMapsReady } from "../../hooks/useGoogleMapsReady";
 import { attachPlaceAutocomplete, type PlaceSelection } from "../../lib/googleMaps";
 import { extractRouteFromImage } from "../../lib/gemini";
-import { resolveGeminiApiKey } from "../../lib/apiKeys";
+import { useServerConfig } from "../../lib/serverConfig";
 import {
   diffMinutes,
   hasAnyParsedData,
@@ -67,8 +67,8 @@ const CATEGORY_LABEL: Record<StopCategory, string> = {
 
 export function ImportRouteForm({ tripId, onDone }: { tripId: ID; onDone?: () => void }) {
   const { ready } = useGoogleMapsReady();
-  const userGeminiApiKey = useTripStore((s) => s.settings.geminiApiKey);
-  const geminiApiKey = resolveGeminiApiKey(userGeminiApiKey);
+  const geminiAvailable = useServerConfig((s) => s.geminiAvailable);
+  const serverConfigLoaded = useServerConfig((s) => s.loaded);
   const placeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,14 +134,14 @@ export function ImportRouteForm({ tripId, onDone }: { tripId: ID; onDone?: () =>
   }
 
   async function handleImageFile(file: File) {
-    if (!geminiApiKey) {
-      setParseError("Gemini APIキーが設定されていません。設定画面から登録してください。");
+    if (!geminiAvailable) {
+      setParseError("画像読み取りは現在利用できません(サーバーにGemini APIキーが設定されていません)。");
       return;
     }
     setExtracting(true);
     setParseError(null);
     try {
-      const extracted = await extractRouteFromImage(geminiApiKey, file);
+      const extracted = await extractRouteFromImage(file);
       const info = toParsedRouteInfo(extracted);
       if (info.segments.length === 0) {
         setParsed(null);
@@ -390,9 +390,9 @@ export function ImportRouteForm({ tripId, onDone }: { tripId: ID; onDone?: () =>
                   onChange={handleFileInputChange}
                   style={{ marginTop: 6 }}
                 />
-                {!geminiApiKey && (
+                {serverConfigLoaded && !geminiAvailable && (
                   <p className="muted">
-                    ⚠ Gemini APIキーが未設定です。設定画面から登録してください。
+                    ⚠ 画像読み取りは現在利用できません(サーバーにGemini APIキーが設定されていません)。
                   </p>
                 )}
               </div>

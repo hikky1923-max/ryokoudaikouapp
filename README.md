@@ -8,14 +8,17 @@
 - **希望滞在時間・時刻のピン留め**: 各場所の滞在時間を入力すると、以降の到着・出発時刻が自動計算されます。特定の場所だけ時刻を固定（ピン留め）することもできます。
 - **並び替え・挿入・削除**: 場所の順番を入れ替えたり、任意の位置に新しい場所（宿泊を含む）を挿入したり、削除したりできます。
 - **予算管理**: カテゴリ別の予算項目（計画額・実績額）を管理し、行程表の場所や移動と紐付けられます。合計金額は常に予算項目の集計から算出され、二重管理になりません。
-- **Google Maps連携（任意）**: 設定画面で自分のGoogle Maps APIキーを登録すると、場所検索（オートコンプリート）と移動ルート・所要時間の自動計算が使えるようになります。未設定でも手動入力だけでアプリは問題なく使えます。
+- **Google Maps・Gemini連携**: サーバー（Vercel）にAPIキーを設定しておくと、場所検索（オートコンプリート）、移動ルート・所要時間の自動計算、乗換案内スクリーンショットの読み取りが使えます。利用者がAPIキーを入力する必要はありません。未設定でも手動入力だけでアプリは問題なく使えます。
 
 ## 開発
 
 ```bash
 npm install
+cp .env.example .env.local  # APIキーを設定
 npm run dev
 ```
+
+`npm run dev` では `api/` 以下のサーバー関数も一緒に動きます。
 
 ## ビルド・Lint
 
@@ -26,11 +29,16 @@ npm run lint
 
 ## デプロイ
 
-`main` ブランチへのpushで GitHub Actions が自動的に GitHub Pages へデプロイします（`.github/workflows/deploy.yml`）。
+Vercelで公開します（`main` へのpushで自動デプロイ）。Vercelの Settings → Environment Variables に次を設定してください。
+
+- `GOOGLE_MAPS_API_KEY`: 地図・場所検索（Maps JavaScript API）と経路計算（Routes API）。地図の仕組み上ブラウザからも見えるため、Google Cloud ConsoleでHTTPリファラー制限とAPI制限をかけてください。
+- `GEMINI_API_KEY`: スクリーンショット読み取り。サーバー（`api/gemini.ts`）の中だけで使い、ブラウザには渡りません。
+
+GitHub Pages（`.github/workflows/deploy.yml`）にはサーバー機能がないため、Google Maps・Geminiの機能は使えません。
 
 ## データの保存
 
-すべてのデータ（旅行・行程・予算・APIキー）はブラウザの localStorage にのみ保存されます。サーバー・データベースは使用していません。
+旅行・行程・予算のデータはブラウザの localStorage にのみ保存されます。サーバーはAPIキーを使った中継（`api/`）だけを行い、データベースは使用していません。
 
 ## 今後の展望
 

@@ -7,12 +7,11 @@ import type {
   ID,
   Leg,
   LegMode,
-  Settings,
   Stop,
   Trip,
 } from "../types";
 import { computeRoute, geocodePlaceName, loadGoogleMapsScript } from "../lib/googleMaps";
-import { resolveGoogleMapsApiKey } from "../lib/apiKeys";
+import { loadServerConfig } from "../lib/serverConfig";
 import { computeStopTimes } from "../lib/timeline";
 
 const now = () => new Date().toISOString();
@@ -22,7 +21,6 @@ interface TripPlannerState {
   stops: Record<ID, Stop>;
   legs: Record<ID, Leg>;
   budgetEntries: Record<ID, BudgetEntry>;
-  settings: Settings;
 }
 
 function emptyState(): TripPlannerState {
@@ -31,7 +29,6 @@ function emptyState(): TripPlannerState {
     stops: {},
     legs: {},
     budgetEntries: {},
-    settings: { googleMapsApiKey: null, geminiApiKey: null },
   };
 }
 
@@ -185,8 +182,6 @@ interface Actions {
   linkBudgetEntryToStop: (budgetEntryId: ID, stopId: ID) => void;
   linkBudgetEntryToLeg: (budgetEntryId: ID, legId: ID) => void;
   unlinkBudgetEntry: (budgetEntryId: ID) => void;
-
-  updateSettings: (patch: Partial<Settings>) => void;
 }
 
 type Store = TripPlannerState & { actions: Actions };
@@ -312,8 +307,9 @@ export const useTripStore = create<Store>()(
           if (!leg) return;
           const fromStop = state.stops[leg.fromStopId];
           const toStop = state.stops[leg.toStopId];
-          const apiKey = resolveGoogleMapsApiKey(state.settings.googleMapsApiKey);
-          if (!fromStop || !toStop || !apiKey) return;
+          if (!fromStop || !toStop) return;
+          const { googleMapsApiKey: apiKey } = await loadServerConfig();
+          if (!apiKey) return;
 
           await loadGoogleMapsScript(apiKey);
 
@@ -366,7 +362,6 @@ export const useTripStore = create<Store>()(
               : undefined;
 
           const result = await computeRoute(
-            apiKey,
             originPoint,
             destinationPoint,
             mode,
@@ -474,16 +469,11 @@ export const useTripStore = create<Store>()(
             }
             unlinkBudgetEntryFromDraft(entry);
           }),
-
-        updateSettings: (patch) =>
-          set((s) => {
-            Object.assign(s.settings, patch);
-          }),
       },
     })),
     {
       name: "trip-planner-storage",
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
         const state = persistedState as TripPlannerState | undefined;
 
@@ -504,6 +494,12 @@ export const useTripStore = create<Store>()(
           for (const leg of Object.values(state.legs)) {
             syncLegBudgetEntry(state, leg);
           }
+        }
+
+        // v2→v3: APIキーはサーバー側で管理するようになったため、
+        // 以前ユーザーが入力してlocalStorageに保存していたキーを削除する。
+        if (version < 3 && state) {
+          delete (state as { settings?: unknown }).settings;
         }
 
         return state as Store;

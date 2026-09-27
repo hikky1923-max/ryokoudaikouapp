@@ -93,8 +93,3 @@ export interface BudgetSummary {
   actualTotal: number;
   byCategory: Record<BudgetCategory, { planned: number; actual: number }>;
 }
-
-export interface Settings {
-  googleMapsApiKey: string | null;
-  geminiApiKey: string | null; // 乗換案内のスクリーンショットからの経路読み取りに使用
-}

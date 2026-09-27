@@ -83,15 +83,6 @@ select {
   border-bottom-color: var(--accent);
 }
 
-.tab-bar .spacer {
-  flex: 1;
-}
-
-.tab-bar .settings-link {
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
