@@ -3,6 +3,7 @@ import { useTripStore } from "../../store/useTripStore";
 import { useGoogleMapsReady } from "../../hooks/useGoogleMapsReady";
 import { attachPlaceAutocomplete, type PlaceSelection } from "../../lib/googleMaps";
 import { extractRouteFromImage } from "../../lib/gemini";
+import { resolveGeminiApiKey } from "../../lib/apiKeys";
 import {
   diffMinutes,
   hasAnyParsedData,
@@ -66,7 +67,8 @@ const CATEGORY_LABEL: Record<StopCategory, string> = {
 
 export function ImportRouteForm({ tripId, onDone }: { tripId: ID; onDone?: () => void }) {
   const { ready } = useGoogleMapsReady();
-  const geminiApiKey = useTripStore((s) => s.settings.geminiApiKey);
+  const userGeminiApiKey = useTripStore((s) => s.settings.geminiApiKey);
+  const geminiApiKey = resolveGeminiApiKey(userGeminiApiKey);
   const placeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

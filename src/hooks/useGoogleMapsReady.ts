@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTripStore } from "../store/useTripStore";
 import { isGoogleMapsReady, loadGoogleMapsScript } from "../lib/googleMaps";
+import { resolveGoogleMapsApiKey } from "../lib/apiKeys";
 
 export function useGoogleMapsReady() {
-  const apiKey = useTripStore((s) => s.settings.googleMapsApiKey);
+  const userApiKey = useTripStore((s) => s.settings.googleMapsApiKey);
+  const apiKey = resolveGoogleMapsApiKey(userApiKey);
   const [loaded, setLoaded] = useState(isGoogleMapsReady());
   const [error, setError] = useState<string | null>(null);
 

@@ -12,6 +12,7 @@ import type {
   Trip,
 } from "../types";
 import { computeRoute, geocodePlaceName, loadGoogleMapsScript } from "../lib/googleMaps";
+import { resolveGoogleMapsApiKey } from "../lib/apiKeys";
 import { computeStopTimes } from "../lib/timeline";
 
 const now = () => new Date().toISOString();
@@ -311,7 +312,7 @@ export const useTripStore = create<Store>()(
           if (!leg) return;
           const fromStop = state.stops[leg.fromStopId];
           const toStop = state.stops[leg.toStopId];
-          const apiKey = state.settings.googleMapsApiKey;
+          const apiKey = resolveGoogleMapsApiKey(state.settings.googleMapsApiKey);
           if (!fromStop || !toStop || !apiKey) return;
 
           await loadGoogleMapsScript(apiKey);
