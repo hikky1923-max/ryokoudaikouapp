@@ -1,8 +1,6 @@
-// Google Maps をブラウザから直接利用するクライアント。
-// APIキーはユーザーが設定画面で入力し、localStorageに保存されたものを利用する(バックエンド不要)。
+// Google Maps のクライアント。APIキーはVercelの環境変数に置き、サーバー(/api/config)から受け取る。
 // 場所検索(Places Autocomplete)はMaps JavaScript API(SDK)を動的読み込みして使う。
-// 経路計算は新しい Routes API を素のfetch()で直接呼び出す(CORS対応済みのREST API)。
-// 旧来のDirections REST APIとは異なりCORS制限を受けず、SDKの読み込みも不要。
+// 経路計算は新しい Routes API を、サーバーの中継(/api/routes)経由で呼び出す。
 
 import type { LegMode, TransitStepDetail } from "../types";
 
@@ -139,15 +137,6 @@ export interface RouteResult {
   transitDetails: TransitStepDetail[] | null;
 }
 
-const ROUTES_API_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
-
-const ROUTES_API_FIELD_MASK = [
-  "routes.duration",
-  "routes.distanceMeters",
-  "routes.legs.steps.travelMode",
-  "routes.legs.steps.transitDetails",
-].join(",");
-
 const MODE_MAP: Record<LegMode, string> = {
   walk: "WALK",
   transit: "TRANSIT",
@@ -163,6 +152,10 @@ function toRoutesApiWaypoint(p: { placeId: string } | { lat: number; lng: number
 function describeRoutesApiError(httpStatus: number, body: any): string {
   const code: string | undefined = body?.error?.status;
   switch (code) {
+    case "NOT_CONFIGURED":
+      return "Google Maps APIキーがサーバーに設定されていません。";
+    case "FORBIDDEN_ORIGIN":
+      return "許可されていないアクセス元です。";
     case "PERMISSION_DENIED":
       return "このAPIキーではこの機能を利用できません。Google Cloud ConsoleでRoutes APIが有効になっているか、キーの制限設定を確認してください。";
     case "RESOURCE_EXHAUSTED":
@@ -177,23 +170,14 @@ function describeRoutesApiError(httpStatus: number, body: any): string {
 }
 
 export async function computeRoute(
-  apiKey: string,
   origin: { placeId: string } | { lat: number; lng: number },
   destination: { placeId: string } | { lat: number; lng: number },
   mode: LegMode,
   departureTime?: string
 ): Promise<RouteResult> {
-  if (!apiKey) {
-    throw new GoogleMapsError("Google Maps APIキーが設定されていません。");
-  }
-
-  const res = await fetch(ROUTES_API_URL, {
+  const res = await fetch("/api/routes", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": ROUTES_API_FIELD_MASK,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       origin: toRoutesApiWaypoint(origin),
       destination: toRoutesApiWaypoint(destination),
